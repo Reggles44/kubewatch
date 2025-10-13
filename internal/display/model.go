@@ -78,36 +78,39 @@ func (m *Model[T]) View() string {
 	rows = append(rows, builder.String())
 
 	// Write Data
-	itemParams := [][]string{}
-	for _, match := range m.Matches {
+	if len(m.Matches) > 0 {
+
+		itemParams := [][]string{}
+		for _, match := range m.Matches {
 			itemParams = append(itemParams, m.getParams(m.Items.values[match.Index], now))
-	}
-
-	columnLengths := make([]int, len(itemParams[0]))
-	columnBuffer := 3
-	for _, line := range itemParams {
-		for i, val := range line {
-			columnLengths[i] = max(columnLengths[i], len(val))
 		}
-	}
 
-	lineLength := 0
-	for _, l := range columnLengths {
-		lineLength += l + columnBuffer
-	}
-
-	itemRows := []string{}
-	for _, params := range itemParams {
-		var buffer strings.Builder
-		for i, v := range params {
-			buffer.WriteString(v)
-			buffer.WriteString(strings.Repeat(" ", columnLengths[i]+columnBuffer-len(v)))
+		columnLengths := make([]int, len(itemParams[0]))
+		columnBuffer := 3
+		for _, line := range itemParams {
+			for i, val := range line {
+				columnLengths[i] = max(columnLengths[i], len(val))
+			}
 		}
-		itemRows = append(itemRows, buffer.String())
-	}
 
-	sort.Strings(itemRows)
-	rows = append(rows, lipgloss.JoinVertical(lipgloss.Left, itemRows...))
+		lineLength := 0
+		for _, l := range columnLengths {
+			lineLength += l + columnBuffer
+		}
+
+		itemRows := []string{}
+		for _, params := range itemParams {
+			var buffer strings.Builder
+			for i, v := range params {
+				buffer.WriteString(v)
+				buffer.WriteString(strings.Repeat(" ", columnLengths[i]+columnBuffer-len(v)))
+			}
+			itemRows = append(itemRows, buffer.String())
+		}
+
+		sort.Strings(itemRows)
+		rows = append(rows, lipgloss.JoinVertical(lipgloss.Left, itemRows...))
+	}
 
 	return windowStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
