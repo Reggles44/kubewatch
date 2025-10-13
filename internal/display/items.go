@@ -1,12 +1,8 @@
 package display
 
-import "time"
-
-
 type items[T any] struct {
 	values []*T
-	getKey func (obj *T) string
-	getRow func (obj *T, now time.Time) string
+	getKey func(obj *T) string
 }
 
 func (items *items[T]) ItemString(i int) string {
@@ -16,4 +12,3 @@ func (items *items[T]) ItemString(i int) string {
 func (items *items[T]) Len() int {
 	return len(items.values)
 }
-

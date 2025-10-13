@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 			func(pod *v1.Pod) string { return pod.Name },
 		)
 
-		kube.WatchPods(model, []string{""})
+		go kube.WatchPods(model, "kube-system")
 
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {

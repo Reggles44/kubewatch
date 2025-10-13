@@ -44,7 +44,7 @@ func New[T any](
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	model := &Model[T]{
-		Items:         &items[T]{values: values, getKey: getKey},
+		Items:         &items[T]{getKey: getKey},
 		ChangeChannel: make(chan [2]*T),
 		getParams:     getParams,
 		getKey:        getKey,
@@ -59,6 +59,36 @@ func (m *Model[T]) Init() tea.Cmd {
 		textinput.Blink,
 		m.reload(),
 	}
+
+	// Sync Values
+	go func() {
+		for {
+			update, ok := <-m.ChangeChannel
+			if !ok {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			oldObj := update[0]
+			newObj := update[1]
+
+			// Remove Old
+			if oldObj != nil {
+				for i, o := range m.Items.values {
+					if m.getKey(o) == m.getKey(oldObj) {
+						m.Items.values = append(m.Items.values[:i], m.Items.values[i+1:]...)
+						break
+					}
+				}
+			}
+
+			// Add New
+			if newObj != nil {
+				m.Items.values = append([]*T{newObj}, m.Items.values...)
+			}
+
+			m.filter()
+		}
+	}()
 
 	return tea.Batch(cmds...)
 }
@@ -82,6 +112,10 @@ func (m *Model[T]) View() string {
 
 		itemParams := [][]string{}
 		for _, match := range m.Matches {
+			// log.Printf("%v", match)
+			// if match.Index > len(m.Items.values){
+			// 	m.filter()
+			// }
 			itemParams = append(itemParams, m.getParams(m.Items.values[match.Index], now))
 		}
 
@@ -116,6 +150,9 @@ func (m *Model[T]) View() string {
 }
 
 func (m *Model[T]) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	// Update tea msgs
 	switch msg := message.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -133,7 +170,7 @@ func (m *Model[T]) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.reload()
 	}
 
-	var cmds []tea.Cmd
+	// Update filter
 	beforeValue := m.input.Value()
 
 	{
