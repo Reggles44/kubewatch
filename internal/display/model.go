@@ -8,11 +8,13 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	fzf "github.com/koki-develop/go-fzf"
 	"github.com/muesli/termenv"
 )
 
 type Model[T any] struct {
-	Items map[string]*T
+	Items   *items[T]
+	Matches fzf.Matches
 
 	ChangeChannel chan [2]*T
 
@@ -28,7 +30,7 @@ type Model[T any] struct {
 }
 
 func New[T any](
-	initial map[string]*T,
+	values []*T,
 	getParams func(obj *T, now time.Time) []string,
 	getKey func(obj *T) string,
 ) *Model[T] {
@@ -41,13 +43,15 @@ func New[T any](
 	input.Focus()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
-	return &Model[T]{
-		Items:         initial,
+	model := &Model[T]{
+		Items:         &items[T]{values: values, getKey: getKey},
 		ChangeChannel: make(chan [2]*T),
 		getParams:     getParams,
 		getKey:        getKey,
 		input:         input,
 	}
+	model.filter()
+	return model
 }
 
 func (m *Model[T]) Init() tea.Cmd {
@@ -74,38 +78,36 @@ func (m *Model[T]) View() string {
 	rows = append(rows, builder.String())
 
 	// Write Data
-	if len(m.Items) > 0 {
-		itemParams := [][]string{}
-		for _, obj := range m.Items {
-			itemParams = append(itemParams, m.getParams(obj, now))
-		}
-
-		columnLengths := make([]int, len(itemParams[0]))
-		columnBuffer := 3
-		for _, line := range itemParams {
-			for i, val := range line {
-				columnLengths[i] = max(columnLengths[i], len(val))
-			}
-		}
-
-		lineLength := 0
-		for _, l := range columnLengths {
-			lineLength += l + columnBuffer
-		}
-
-		itemRows := []string{}
-		for _, params := range itemParams {
-			var buffer strings.Builder
-			for i, v := range params {
-				buffer.WriteString(v)
-				buffer.WriteString(strings.Repeat(" ", columnLengths[i]+columnBuffer-len(v)))
-			}
-			itemRows = append(itemRows, buffer.String())
-		}
-
-		sort.Strings(itemRows)
-		rows = append(rows, lipgloss.JoinVertical(lipgloss.Left, itemRows...))
+	itemParams := [][]string{}
+	for _, match := range m.Matches {
+			itemParams = append(itemParams, m.getParams(m.Items.values[match.Index], now))
 	}
+
+	columnLengths := make([]int, len(itemParams[0]))
+	columnBuffer := 3
+	for _, line := range itemParams {
+		for i, val := range line {
+			columnLengths[i] = max(columnLengths[i], len(val))
+		}
+	}
+
+	lineLength := 0
+	for _, l := range columnLengths {
+		lineLength += l + columnBuffer
+	}
+
+	itemRows := []string{}
+	for _, params := range itemParams {
+		var buffer strings.Builder
+		for i, v := range params {
+			buffer.WriteString(v)
+			buffer.WriteString(strings.Repeat(" ", columnLengths[i]+columnBuffer-len(v)))
+		}
+		itemRows = append(itemRows, buffer.String())
+	}
+
+	sort.Strings(itemRows)
+	rows = append(rows, lipgloss.JoinVertical(lipgloss.Left, itemRows...))
 
 	return windowStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
@@ -127,26 +129,44 @@ func (m *Model[T]) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case reloadMsg:
 		return m, m.reload()
 	}
-	
+
 	var cmds []tea.Cmd
-	// beforeValue := m.input.Value()
-	//
+	beforeValue := m.input.Value()
+
 	{
 		input, cmd := m.input.Update(message)
-		m.input= input
+		m.input = input
 		cmds = append(cmds, cmd)
+	}
+
+	if beforeValue != m.input.Value() {
+		m.filter()
 	}
 
 	return m, tea.Batch(cmds...)
 }
 
-// func (m *Model[T]) filter() {
-// 	s := m.input.Value()
-//
-// }
+func (m *Model[T]) filter() {
+	search := m.input.Value()
+
+	if search == "" {
+		var matches fzf.Matches
+		for i := range m.Items.Len() {
+			matches = append(matches, fzf.Match{
+				Str:   m.Items.ItemString(i),
+				Index: i,
+			})
+		}
+		m.Matches = matches
+		return
+	}
+
+	// TODO: Search opts
+	m.Matches = fzf.Search(m.Items, search)
+}
 
 func (m *Model[T]) reload() tea.Cmd {
-	return tea.Tick(1 * time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 		return reloadMsg{}
 	})
 }

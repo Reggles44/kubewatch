@@ -11,18 +11,18 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func PodList(namespace string) map[string]*v1.Pod {
+func PodList(namespace string) []*v1.Pod {
 	pods, err := client.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
-	podMap := make(map[string]*v1.Pod)
+	ppods := []*v1.Pod{}
 	for _, pod := range pods.Items {
-		podMap[pod.Name] = &pod
+		ppods = append(ppods, &pod)
 	}
 
-	return podMap
+	return ppods
 }
 
 func WatchPods(display *display.Model[v1.Pod], namespaces []string) {
