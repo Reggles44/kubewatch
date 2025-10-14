@@ -15,6 +15,7 @@ func Watch(
 	stopCh chan struct{},
 	getInformer func(factory informers.SharedInformerFactory) cache.SharedIndexInformer,
 ) {
+	client.AppsV1().Deployments("")
 	// Build Informer
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		client,

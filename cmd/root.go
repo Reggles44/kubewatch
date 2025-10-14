@@ -28,6 +28,8 @@ func init() {
 	// RootCmd Flags
 	rootCmd.Flags().StringVar(&flagNamespace, "namespace", "", "kubernetes namespace")
 
+	rootCmd.AddCommand(deploymentCmd)
+	rootCmd.AddCommand(nodeCmd)
 	rootCmd.AddCommand(podCmd)
 
 	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
