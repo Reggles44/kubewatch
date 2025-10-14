@@ -20,7 +20,7 @@ func init() {
 		panic(err.Error())
 	}
 
-	// create the clientset
+	// cs, err := dynamic.NewForConfig(config)
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())

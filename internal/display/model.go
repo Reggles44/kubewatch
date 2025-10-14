@@ -12,14 +12,14 @@ import (
 	"github.com/muesli/termenv"
 )
 
-type Model[T any] struct {
-	Items   *items[T]
-	Matches fzf.Matches
+type Model struct {
+	items   *items
+	matches fzf.Matches
 
-	ChangeChannel chan [2]*T
+	dataChan chan [2]interface{}
 
-	getParams func(obj *T, now time.Time) []string
-	getKey    func(obj *T) string
+	getParams func(obj interface{}, now time.Time) []string
+	getKey    func(obj interface{}) string
 
 	// window
 	windowWidth     int
@@ -29,11 +29,11 @@ type Model[T any] struct {
 	input textinput.Model
 }
 
-func New[T any](
-	values []*T,
-	getParams func(obj *T, now time.Time) []string,
-	getKey func(obj *T) string,
-) *Model[T] {
+func New(
+	dataChan chan [2]interface{},
+	getParams func(obj interface{}, now time.Time) []string,
+	getKey func(obj interface{}) string,
+) *Model {
 	input := textinput.New()
 	input.Prompt = "> "
 	input.PromptStyle = lipgloss.NewStyle()
@@ -43,18 +43,16 @@ func New[T any](
 	input.Focus()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
-	model := &Model[T]{
-		Items:         &items[T]{getKey: getKey},
-		ChangeChannel: make(chan [2]*T),
-		getParams:     getParams,
-		getKey:        getKey,
-		input:         input,
+	return &Model{
+		items:     &items{getKey: getKey},
+		dataChan:  dataChan,
+		getParams: getParams,
+		getKey:    getKey,
+		input:     input,
 	}
-	model.filter()
-	return model
 }
 
-func (m *Model[T]) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		textinput.Blink,
 		m.reload(),
@@ -63,7 +61,7 @@ func (m *Model[T]) Init() tea.Cmd {
 	// Sync Values
 	go func() {
 		for {
-			update, ok := <-m.ChangeChannel
+			update, ok := <-m.dataChan
 			if !ok {
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -73,9 +71,9 @@ func (m *Model[T]) Init() tea.Cmd {
 
 			// Remove Old
 			if oldObj != nil {
-				for i, o := range m.Items.values {
+				for i, o := range m.items.values {
 					if m.getKey(o) == m.getKey(oldObj) {
-						m.Items.values = append(m.Items.values[:i], m.Items.values[i+1:]...)
+						m.items.values = append(m.items.values[:i], m.items.values[i+1:]...)
 						break
 					}
 				}
@@ -83,7 +81,7 @@ func (m *Model[T]) Init() tea.Cmd {
 
 			// Add New
 			if newObj != nil {
-				m.Items.values = append([]*T{newObj}, m.Items.values...)
+				m.items.values = append([]interface{}{newObj}, m.items.values...)
 			}
 
 			m.filter()
@@ -93,7 +91,7 @@ func (m *Model[T]) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m *Model[T]) View() string {
+func (m *Model) View() string {
 	now := time.Now()
 	windowStyle := lipgloss.NewStyle()
 
@@ -108,15 +106,15 @@ func (m *Model[T]) View() string {
 	rows = append(rows, builder.String())
 
 	// Write Data
-	if len(m.Matches) > 0 {
+	if len(m.matches) > 0 {
 
 		itemParams := [][]string{}
-		for _, match := range m.Matches {
+		for _, match := range m.matches {
 			// log.Printf("%v", match)
 			// if match.Index > len(m.Items.values){
 			// 	m.filter()
 			// }
-			itemParams = append(itemParams, m.getParams(m.Items.values[match.Index], now))
+			itemParams = append(itemParams, m.getParams(m.items.values[match.Index], now))
 		}
 
 		columnLengths := make([]int, len(itemParams[0]))
@@ -149,7 +147,7 @@ func (m *Model[T]) View() string {
 	return windowStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
-func (m *Model[T]) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	// Update tea msgs
@@ -186,26 +184,26 @@ func (m *Model[T]) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *Model[T]) filter() {
+func (m *Model) filter() {
 	search := m.input.Value()
 
 	if search == "" {
 		var matches fzf.Matches
-		for i := range m.Items.Len() {
+		for i := range m.items.Len() {
 			matches = append(matches, fzf.Match{
-				Str:   m.Items.ItemString(i),
+				Str:   m.items.ItemString(i),
 				Index: i,
 			})
 		}
-		m.Matches = matches
+		m.matches = matches
 		return
 	}
 
 	// TODO: Search opts
-	m.Matches = fzf.Search(m.Items, search)
+	m.matches = fzf.Search(m.items, search)
 }
 
-func (m *Model[T]) reload() tea.Cmd {
+func (m *Model) reload() tea.Cmd {
 	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 		return reloadMsg{}
 	})

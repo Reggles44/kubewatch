@@ -1,14 +1,14 @@
 package display
 
-type items[T any] struct {
-	values []*T
-	getKey func(obj *T) string
+type items struct {
+	values []interface{}
+	getKey func(obj interface{}) string
 }
 
-func (items *items[T]) ItemString(i int) string {
+func (items *items) ItemString(i int) string {
 	return items.getKey(items.values[i])
 }
 
-func (items *items[T]) Len() int {
+func (items *items) Len() int {
 	return len(items.values)
 }
