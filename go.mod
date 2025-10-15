@@ -6,7 +6,6 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/koki-develop/go-fzf v0.15.0
 	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.10.1

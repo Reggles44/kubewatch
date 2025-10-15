@@ -1,38 +1,74 @@
+version: 2
 project_name: kubewatch
 
 before:
   hooks:
-    - go mod tidy
+    - go mod download
+
 builds:
-  - main: ./main.go
-    env:
-      - CGO_ENABLED=0
+  - id: kubewatch
     goos:
+      - darwin
       - linux
       - windows
-      - darwin
+      - freebsd
+      - openbsd
+      - android
     goarch:
       - amd64
+      - arm
       - arm64
+      - loong64
+      - ppc64le
+      - s390x
+    goarm:
+      - "5"
+      - "6"
+      - "7"
+    flags:
+      - -trimpath
+    ldflags:
+      - "-s -w -X main.version={{ .Version }} -X main.revision={{ .ShortCommit }}"
+    ignore:
+      - goos: freebsd
+        goarch: arm
+      - goos: openbsd
+        goarch: arm
+      - goos: freebsd
+        goarch: arm64
+      - goos: openbsd
+        goarch: arm64
+      - goos: android
+        goarch: amd64
+      - goos: android
+        goarch: arm
+      - goos: windows
+        goarch: arm
+
 archives:
-  - format: tar.gz
-    name_template: >-
-      {{ .ProjectName }}_
-      {{- title .Os }}_
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
-      {{- else }}{{ .Arch }}{{ end }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
+  - name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    formats:
+      - tar.gz
     format_overrides:
-    - goos: windows
-      format: zip
-checksum:
-  name_template: 'checksums.txt'
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - non-existent*
+
+release:
+  github:
+    owner: Reggles44
+    name: kubewatch
+  prerelease: auto
+  name_template: "{{ .Version }}"
+
+snapshot:
+  version_template: "{{ .Version }}-devel"
+
 changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-
-
+      - README
+      - test
