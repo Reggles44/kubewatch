@@ -2,19 +2,20 @@ package display
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	fzf "github.com/koki-develop/go-fzf"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/muesli/termenv"
 )
 
 type Model struct {
-	items   *items
-	matches fzf.Matches
+	items   []interface{}
+	matches []int
 
 	dataChan chan [2]interface{}
 
@@ -37,18 +38,36 @@ func New(
 	input := textinput.New()
 	input.Prompt = "> "
 	input.PromptStyle = lipgloss.NewStyle()
-	input.Placeholder = "Filter..."
+	// input.Placeholder = ""
 	input.PlaceholderStyle = lipgloss.NewStyle().Faint(true)
-	input.TextStyle = lipgloss.NewStyle().Faint(true)
+	input.TextStyle = lipgloss.NewStyle()
 	input.Focus()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	return &Model{
-		items:     &items{getKey: getKey},
 		dataChan:  dataChan,
 		getParams: getParams,
 		getKey:    getKey,
 		input:     input,
+	}
+}
+
+func (m *Model) addObj(obj interface{}) {
+	if obj == nil {
+		return
+	}
+	m.items = append([]interface{}{obj}, m.items...)
+}
+
+func (m *Model) removeObj(obj interface{}) {
+	if obj == nil {
+		return
+	}
+	for i, o := range m.items {
+		if m.getKey(o) == m.getKey(obj) {
+			m.items = append(m.items[:i], m.items[i+1:]...)
+			return
+		}
 	}
 }
 
@@ -61,29 +80,9 @@ func (m *Model) Init() tea.Cmd {
 	// Sync Values
 	go func() {
 		for {
-			update, ok := <-m.dataChan
-			if !ok {
-				time.Sleep(100 * time.Millisecond)
-			}
-
-			oldObj := update[0]
-			newObj := update[1]
-
-			// Remove Old
-			if oldObj != nil {
-				for i, o := range m.items.values {
-					if m.getKey(o) == m.getKey(oldObj) {
-						m.items.values = append(m.items.values[:i], m.items.values[i+1:]...)
-						break
-					}
-				}
-			}
-
-			// Add New
-			if newObj != nil {
-				m.items.values = append([]interface{}{newObj}, m.items.values...)
-			}
-
+			update := <-m.dataChan
+			m.removeObj(update[0])
+			m.addObj(update[1])
 			m.filter()
 		}
 	}()
@@ -102,19 +101,24 @@ func (m *Model) View() string {
 
 	// Write Separator Row
 	var builder strings.Builder
-	builder.WriteString(strings.Repeat("─", m.windowWidth))
+	builder.WriteString(strconv.Itoa(len(m.matches)))
+	builder.WriteRune('/')
+	builder.WriteString(strconv.Itoa(len(m.items)))
+	builder.WriteRune(' ')
+	borderWidth := max(m.windowWidth-builder.Len(), 0)
+	builder.WriteString(strings.Repeat("─", borderWidth))
 	rows = append(rows, builder.String())
 
 	// Write Data
 	if len(m.matches) > 0 {
-
 		itemParams := [][]string{}
 		for _, match := range m.matches {
-			// log.Printf("%v", match)
-			// if match.Index > len(m.Items.values){
-			// 	m.filter()
-			// }
-			itemParams = append(itemParams, m.getParams(m.items.values[match.Index], now))
+			obj := m.items[match]
+			var params []string
+			if obj != nil {
+				params = m.getParams(obj, now)
+			}
+			itemParams = append(itemParams, params)
 		}
 
 		columnLengths := make([]int, len(itemParams[0]))
@@ -137,7 +141,16 @@ func (m *Model) View() string {
 				buffer.WriteString(v)
 				buffer.WriteString(strings.Repeat(" ", columnLengths[i]+columnBuffer-len(v)))
 			}
-			itemRows = append(itemRows, buffer.String())
+
+			row := buffer.String()
+			if len(row) >= m.windowWidth {
+				row = row[:m.windowWidth-3] + "..."
+			}
+			itemRows = append(itemRows, row)
+
+			if len(itemRows) >= m.windowHeight-len(rows) {
+				break
+			}
 		}
 
 		sort.Strings(itemRows)
@@ -187,20 +200,20 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) filter() {
 	search := m.input.Value()
 
+	var matches []int
 	if search == "" {
-		var matches fzf.Matches
-		for i := range m.items.Len() {
-			matches = append(matches, fzf.Match{
-				Str:   m.items.ItemString(i),
-				Index: i,
-			})
+		for i := range len(m.items) {
+			matches = append(matches, i)
 		}
-		m.matches = matches
-		return
+	} else {
+		for i, obj := range m.items {
+			if fuzzy.Match(search, m.getKey(obj)) {
+				matches = append(matches, i)
+			}
+		}
 	}
 
-	// TODO: Search opts
-	m.matches = fzf.Search(m.items, search)
+	m.matches = matches
 }
 
 func (m *Model) reload() tea.Cmd {
