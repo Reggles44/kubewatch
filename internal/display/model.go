@@ -11,16 +11,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/muesli/termenv"
+	"github.com/reggles44/kubewatch/internal/kube"
+	"github.com/reggles44/kubewatch/internal/resources"
 )
 
 type Model struct {
 	items   []interface{}
 	matches []int
 
-	dataChan chan [2]interface{}
+	dataCh chan kube.WatchEvent
 
-	getParams func(obj interface{}, now time.Time) []string
-	getKey    func(obj interface{}) string
+	resource resources.KubeResource
 
 	// window
 	windowWidth     int
@@ -31,9 +32,8 @@ type Model struct {
 }
 
 func New(
-	dataChan chan [2]interface{},
-	getParams func(obj interface{}, now time.Time) []string,
-	getKey func(obj interface{}) string,
+	dataCh chan kube.WatchEvent,
+	resource resources.KubeResource,
 ) *Model {
 	input := textinput.New()
 	input.Prompt = "> "
@@ -45,10 +45,9 @@ func New(
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	return &Model{
-		dataChan:  dataChan,
-		getParams: getParams,
-		getKey:    getKey,
-		input:     input,
+		dataCh:   dataCh,
+		resource: resource,
+		input:    input,
 	}
 }
 
@@ -64,7 +63,7 @@ func (m *Model) removeObj(obj interface{}) {
 		return
 	}
 	for i, o := range m.items {
-		if m.getKey(o) == m.getKey(obj) {
+		if m.resource.Key(o) == m.resource.Key(obj) {
 			m.items = append(m.items[:i], m.items[i+1:]...)
 			return
 		}
@@ -80,9 +79,13 @@ func (m *Model) Init() tea.Cmd {
 	// Sync Values
 	go func() {
 		for {
-			update := <-m.dataChan
-			m.removeObj(update[0])
-			m.addObj(update[1])
+			event := <-m.dataCh
+			switch event.Event {
+			case "add":
+				m.addObj(event.Object)
+			case "delete":
+				m.removeObj(event.Object)
+			}
 			m.filter()
 		}
 	}()
@@ -116,7 +119,7 @@ func (m *Model) View() string {
 			obj := m.items[match]
 			var params []string
 			if obj != nil {
-				params = m.getParams(obj, now)
+				params = m.resource.Params(obj, now)
 			}
 			itemParams = append(itemParams, params)
 		}
@@ -207,7 +210,7 @@ func (m *Model) filter() {
 		}
 	} else {
 		for i, obj := range m.items {
-			if fuzzy.Match(search, m.getKey(obj)) {
+			if fuzzy.Match(search, m.resource.Key(obj)) {
 				matches = append(matches, i)
 			}
 		}
