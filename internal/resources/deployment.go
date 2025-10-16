@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	appsv1 "k8s.io/api/apps/v1"
 )
 
 var Deployment = KubeResource{
-	Scheme: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployment"},
+	Scheme: appsv1.SchemeGroupVersion.WithResource("deployment"),
 
 	Key: func(obj interface{}) string {
 		deployment := obj.(*appsv1.Deployment)

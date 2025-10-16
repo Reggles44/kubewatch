@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	corev1 "k8s.io/api/core/v1"
 )
 
 var Node = KubeResource{
-	Scheme: schema.GroupVersionResource{Group: "core", Version: "v1", Resource: "nod"},
+	Scheme: corev1.SchemeGroupVersion.WithResource("node"),
 
 	Key: func(obj interface{}) string {
 		node := obj.(*corev1.Node)
