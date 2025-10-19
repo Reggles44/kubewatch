@@ -3,6 +3,8 @@ package printer
 import (
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -11,8 +13,9 @@ import (
 type ParamGenerator func(o *unstructured.Unstructured, now time.Time) ([]string, error)
 
 var paramsFuncs = map[schema.GroupVersionKind]ParamGenerator{
-	corev1.SchemeGroupVersion.WithKind("Pod"): podParams,
-	corev1.SchemeGroupVersion.WithKind("Node"): nodeParams,
+	corev1.SchemeGroupVersion.WithKind("Pod"):        podParams,
+	corev1.SchemeGroupVersion.WithKind("Node"):       nodeParams,
+	appsv1.SchemeGroupVersion.WithKind("Deployment"): deploymentParams,
 }
 
 func GetParams(t schema.GroupVersionKind, o *unstructured.Unstructured, now time.Time) []string {
