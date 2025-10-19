@@ -9,19 +9,17 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/muesli/termenv"
-	"github.com/reggles44/kubewatch/internal/kube"
-	"github.com/reggles44/kubewatch/internal/resources"
+	"github.com/reggles44/kubewatch/internal/printer"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
 type Model struct {
-	items   []interface{}
+	items   []*unstructured.Unstructured
 	matches []int
 
-	dataCh chan kube.WatchEvent
-
-	resource resources.KubeResource
+	dataCh chan watch.Event
 
 	// window
 	windowWidth     int
@@ -31,10 +29,7 @@ type Model struct {
 	input textinput.Model
 }
 
-func New(
-	dataCh chan kube.WatchEvent,
-	resource resources.KubeResource,
-) *Model {
+func New(dataCh chan watch.Event) *Model {
 	input := textinput.New()
 	input.Prompt = "> "
 	input.PromptStyle = lipgloss.NewStyle()
@@ -45,25 +40,24 @@ func New(
 	lipgloss.SetColorProfile(termenv.TrueColor)
 
 	return &Model{
-		dataCh:   dataCh,
-		resource: resource,
-		input:    input,
+		dataCh: dataCh,
+		input:  input,
 	}
 }
 
-func (m *Model) addObj(obj interface{}) {
+func (m *Model) addObj(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
 	}
-	m.items = append([]interface{}{obj}, m.items...)
+	m.items = append([]*unstructured.Unstructured{obj}, m.items...)
 }
 
-func (m *Model) removeObj(obj interface{}) {
+func (m *Model) removeObj(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
 	}
 	for i, o := range m.items {
-		if m.resource.Key(o) == m.resource.Key(obj) {
+		if o.GetName() == obj.GetName() {
 			m.items = append(m.items[:i], m.items[i+1:]...)
 			return
 		}
@@ -80,11 +74,23 @@ func (m *Model) Init() tea.Cmd {
 	go func() {
 		for {
 			event := <-m.dataCh
-			switch event.Event {
-			case "add":
-				m.addObj(event.Object)
-			case "delete":
-				m.removeObj(event.Object)
+			obj := event.Object.(*unstructured.Unstructured)
+			obj.GroupVersionKind()
+			switch event.Type {
+			case watch.Added:
+				m.addObj(obj)
+
+			case watch.Modified:
+				m.removeObj(obj)
+				m.addObj(obj)
+
+			case watch.Deleted:
+				m.removeObj(obj)
+
+				// case watch.Bookmark:
+				// case watch.Error:
+				// default:
+
 			}
 			m.filter()
 		}
@@ -117,10 +123,7 @@ func (m *Model) View() string {
 		itemParams := [][]string{}
 		for _, match := range m.matches {
 			obj := m.items[match]
-			var params []string
-			if obj != nil {
-				params = m.resource.Params(obj, now)
-			}
+			params := printer.GetParams(obj.GroupVersionKind(), obj, now)
 			itemParams = append(itemParams, params)
 		}
 
@@ -159,7 +162,6 @@ func (m *Model) View() string {
 		sort.Strings(itemRows)
 		rows = append(rows, lipgloss.JoinVertical(lipgloss.Left, itemRows...))
 	}
-
 	return windowStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 
@@ -209,11 +211,15 @@ func (m *Model) filter() {
 			matches = append(matches, i)
 		}
 	} else {
-		for i, obj := range m.items {
-			if fuzzy.Match(search, m.resource.Key(obj)) {
-				matches = append(matches, i)
-			}
+		for i := range len(m.items) {
+			matches = append(matches, i)
 		}
+
+		// for i, obj := range m.items {
+		// 	if fuzzy.Match(search, m.resource.Key(obj)) {
+		// 		matches = append(matches, i)
+		// 	}
+		// }
 	}
 
 	m.matches = matches

@@ -1,55 +1,45 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/reggles44/kubewatch/internal/display"
 	"github.com/reggles44/kubewatch/internal/kube"
-	"github.com/reggles44/kubewatch/internal/resources"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"k8s.io/apimachinery/pkg/watch"
 )
 
-var flagNamespace string
+func NewCmd() (*cobra.Command, error) {
+	configFlags := kube.NewConfigFlags()
 
-var rootCmd = &cobra.Command{
-	Use:       "kubewatch",
-	Short:     "Watch a kubernetes cluster",
-	Run: func(cmd *cobra.Command, args []string) {
-		dataCh := make(chan kube.WatchEvent)
-		defer close(dataCh)
+	cmd := &cobra.Command{
+		Use:   "kubewatch",
+		Short: "Watch a kubernetes cluster",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Get Resource
+			r, err := kube.GetResource(args, configFlags)
+			if err != nil {
+				panic(err)
+			}
 
-		res, ok := resources.Get(args[0])
-		if !ok {
-			log.Fatal("args not valid")
-		}
+			// Make Channel
+			dataCh := make(chan watch.Event)
+			defer close(dataCh)
 
-		disp := display.New(dataCh, res)
+			// Start watching
+			go kube.WatchRuntimeObject(r, dataCh)
 
-		go kube.Watch(res.Scheme, flagNamespace, dataCh)
+			d := display.New(dataCh)
 
-		p := tea.NewProgram(disp, tea.WithAltScreen())
-		if _, err := p.Run(); err != nil {
-			log.Fatal(err)
-		}
-	},
-}
-
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprint(os.Stderr, err)
-		os.Exit(0)
+			p := tea.NewProgram(d, tea.WithAltScreen())
+			if _, err := p.Run(); err != nil {
+				log.Fatal(err)
+			}
+		},
 	}
-}
 
-func init() {
-	// cobra.OnInitialize(config.InitConfig)
+	configFlags.AddFlags(cmd.PersistentFlags())
 
-	// RootCmd Flags
-	rootCmd.Flags().StringVar(&flagNamespace, "namespace", "", "kubernetes namespace")
-
-	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	return cmd, nil
 }

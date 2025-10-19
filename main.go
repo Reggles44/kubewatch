@@ -1,9 +1,23 @@
 package main
 
-import "github.com/reggles44/kubewatch/cmd"
+import (
+	"fmt"
+	"os"
+
+	"github.com/reggles44/kubewatch/cmd"
+)
 
 var version = "0.0.2"
 
 func main() {
-	cmd.Execute()
+	root, err := cmd.NewCmd()
+	if err != nil {
+		fmt.Println(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	if err := root.Execute(); err != nil {
+		fmt.Println(os.Stderr, err)
+		os.Exit(1)
+	}
 }
