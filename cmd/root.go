@@ -4,8 +4,8 @@ import (
 	"log"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/reggles44/kubewatch/internal/display"
-	"github.com/reggles44/kubewatch/internal/kube"
+	"github.com/reggles44/kubewatch/pkg/display"
+	"github.com/reggles44/kubewatch/pkg/kube"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/watch"
 )
