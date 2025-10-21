@@ -7,7 +7,7 @@ import (
 	"github.com/reggles44/kubewatch/cmd"
 )
 
-var version = "0.0.2"
+var version = "0.0.3"
 
 func main() {
 	root, err := cmd.NewCmd()
