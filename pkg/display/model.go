@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/muesli/termenv"
 	"github.com/reggles44/kubewatch/pkg/printer"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -211,15 +212,15 @@ func (m *Model) filter() {
 			matches = append(matches, i)
 		}
 	} else {
-		for i := range len(m.items) {
-			matches = append(matches, i)
-		}
-
-		// for i, obj := range m.items {
-		// 	if fuzzy.Match(search, m.resource.Key(obj)) {
-		// 		matches = append(matches, i)
-		// 	}
+		// for i := range len(m.items) {
+		// 	matches = append(matches, i)
 		// }
+
+		for i, obj := range m.items {
+			if fuzzy.Match(search, obj.GetName()) {
+				matches = append(matches, i)
+			}
+		}
 	}
 
 	m.matches = matches
